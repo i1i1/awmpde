@@ -1,0 +1,19 @@
+[package]
+name = "awmpde_derive"
+version = "0.2.0"
+authors = ["i1i1"]
+edition = "2018"
+
+description = "awmpde used for deriving multipart request for actix web 3"
+documentation = "https://docs.rs/awmpde_derive"
+repository = "https://github.com/i1i1/awmpde"
+license = "MIT OR Apache-2.0"
+keywords = ["multipart", "derive", "actix-web", "actix", "macro"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "1"
+quote = "1"
+proc-macro2 = "1"

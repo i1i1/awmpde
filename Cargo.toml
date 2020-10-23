@@ -1,0 +1,2 @@
+[workspace]
+members = ["awmpde", "awmpde_derive", "awmpde_structs"]
