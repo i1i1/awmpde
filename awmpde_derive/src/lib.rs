@@ -58,6 +58,9 @@ pub fn derive_actix_multipart(input: TokenStream) -> TokenStream {
             if let Some(vty) = get_struct_arg("Option", typ) {
                 return quote! { #name: std::option::Option<#vty> };
             }
+            if let Some(vty) = get_struct_arg("Vec", typ) {
+                return quote! { #name: std::vec::Vec<#vty> };
+            }
         }
         quote! { #name: std::result::Result<#ty, awmpde::Error> }
     });
@@ -70,8 +73,11 @@ pub fn derive_actix_multipart(input: TokenStream) -> TokenStream {
 			if get_struct_arg("Option", typ).is_some() {
 				return quote! { #name: std::option::Option::None };
 			}
+			if get_struct_arg("Vec", typ).is_some() {
+				return quote! { #name: std::vec::Vec::new() };
+			}
 		}
-        quote! {
+		quote! {
             #name: std::result::Result::Err(awmpde::Error::FieldError(stringify!(#name)))
         }
     });
@@ -92,14 +98,7 @@ pub fn derive_actix_multipart(input: TokenStream) -> TokenStream {
                     let code = quote! {{
                         let f =
                             <#vty as awmpde::FromField>::from_field(field).await?;
-                        match mpstruct.#name {
-                            Ok(ref mut v) => {
-                                v.push(f);
-                            },
-                            Err(_) => {
-                                mpstruct.#name = Ok(std::vec::Vec::new());
-                            }
-                        }
+						mpstruct.#name.push(f);
                     }};
                     return (name, code);
                 } else if let Some(vty) = get_struct_arg("Option", typ) {
@@ -127,7 +126,9 @@ pub fn derive_actix_multipart(input: TokenStream) -> TokenStream {
         let name = &f.ident;
         let ty = &f.ty;
         if let Type::Path(ref typ) = ty {
-            if get_struct_arg("Option", typ).is_some() {
+            if get_struct_arg("Option", typ).is_some()
+                || get_struct_arg("Vec", typ).is_some()
+            {
                 return quote! { #name: mpstruct.#name };
             }
         }

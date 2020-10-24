@@ -13,7 +13,7 @@ for `actix-multipart`.
 This crate supports `actix-web` of versions 3.x only.
 
 ```toml
-awmpde = "0.1"
+awmpde = "0.1.1"
 ```
 
 ### Example
@@ -59,6 +59,6 @@ async fn main() -> Result<(), std::io::Error> {
 }
 ```
 
-Current version: 0.1.0
+Current version: 0.1.1
 
 License: MIT
