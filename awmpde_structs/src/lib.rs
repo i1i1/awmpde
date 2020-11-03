@@ -44,9 +44,9 @@ pub enum Error {
     NoFilenameError,
     /// Filename must be valid UTF8
     FilenameUTF8Error,
-    /// Failed to parse Utf8 string
+    /// Failed to parse UTF8 string
     StringDecodeError(#[from] std::string::FromUtf8Error),
-    /// Actix Error
+    /// {0}
     ActixWebError(#[from] actix_web::error::Error),
     /// Failed to find field {0:?} in request
     FieldError(&'static str),
@@ -60,13 +60,13 @@ impl actix_web::error::ResponseError for Error {
         }
     }
 
-    fn error_response(
-        &self,
-    ) -> actix_web::web::HttpResponse<actix_web::dev::Body> {
-        match self {
-            Error::ActixWebError(e) => e.as_response_error().error_response(),
-            _ => actix_web::error::ResponseError::error_response(self),
-        }
+    fn error_response(&self) -> actix_web::web::HttpResponse<actix_web::dev::Body> {
+        actix_web::dev::HttpResponseBuilder::new(self.status_code())
+            .set_header(
+                actix_web::http::header::CONTENT_TYPE,
+                "text/html; charset=utf-8",
+            )
+            .body(self.to_string())
     }
 }
 
@@ -79,9 +79,9 @@ pub trait FromField: Sized {
     /// The associated error which can be returned.
     type Error: Into<actix_http::error::Error>;
     /// Future that resolves to a Self
-    type Future: Future<Output = Result<Self, Self::Error>>;
+    type Future: Future<Output = Result<Self, Self::Error>> + 'static;
     /// Mime that should be in field
-    const MIME: Either<mime::Mime, mime::Name<'static>>;
+    const MIME: Either<mime::Mime, mime::Name<'static>> = Either::Left(mime::APPLICATION_JSON);
 
     fn from_field(field: actix_multipart::Field) -> Self::Future;
 }
@@ -127,15 +127,13 @@ impl<'a, T: Sized> FromRequest for Multipart<T> {
 }
 
 #[derive(Deref, DerefMut, Debug)]
-pub struct ImageBuffer<P: image::Pixel, Cont>(image::ImageBuffer<P, Cont>);
+pub struct ImageBuffer<P: image::Pixel, Cont>(pub Box<image::ImageBuffer<P, Cont>>);
 
 #[derive(Deref, DerefMut)]
-pub struct DynamicImage(pub image::DynamicImage);
+pub struct DynamicImage(pub Box<image::DynamicImage>);
 
 // TODO: doesn't assume UTF8
-pub fn get_content_disposition(
-    field: &actix_multipart::Field,
-) -> HashMap<Box<str>, Box<str>> {
+pub fn get_content_disposition(field: &actix_multipart::Field) -> HashMap<Box<str>, Box<str>> {
     let mut out = HashMap::new();
     let disp = field
         .headers()
@@ -148,7 +146,7 @@ pub fn get_content_disposition(
     assert_eq!(splt.next().unwrap(), "form-data");
 
     for f in splt {
-        let vec = f.splitn(2, "=").collect::<Vec<_>>();
+        let vec = f.splitn(2, '=').collect::<Vec<_>>();
         let k = vec[0];
         let v = vec[1]
             .strip_prefix("\"")
@@ -192,8 +190,7 @@ where
     type Error = Error;
     type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
 
-    const MIME: Either<mime::Mime, mime::Name<'static>> =
-        Either::Right(mime::IMAGE);
+    const MIME: Either<mime::Mime, mime::Name<'static>> = Either::Right(mime::IMAGE);
 
     fn from_field(field: actix_multipart::Field) -> Self::Future {
         let mime = field.content_type().clone();
@@ -221,8 +218,7 @@ impl<T: serde::de::DeserializeOwned + 'static> FromField for Json<T> {
     type Error = Error;
     type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
 
-    const MIME: Either<mime::Mime, mime::Name<'static>> =
-        Either::Left(mime::APPLICATION_JSON);
+    const MIME: Either<mime::Mime, mime::Name<'static>> = Either::Left(mime::APPLICATION_JSON);
 
     fn from_field(field: actix_multipart::Field) -> Self::Future {
         let vec = Vec::<u8>::from_field(field);
@@ -239,8 +235,7 @@ impl FromField for String {
     type Error = Error;
     type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
 
-    const MIME: Either<mime::Mime, mime::Name<'static>> =
-        Either::Right(mime::STAR);
+    const MIME: Either<mime::Mime, mime::Name<'static>> = Either::Right(mime::STAR);
 
     fn from_field(field: actix_multipart::Field) -> Self::Future {
         async move {
@@ -255,8 +250,7 @@ impl FromField for DynamicImage {
     type Error = Error;
     type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
 
-    const MIME: Either<mime::Mime, mime::Name<'static>> =
-        Either::Right(mime::IMAGE);
+    const MIME: Either<mime::Mime, mime::Name<'static>> = Either::Right(mime::IMAGE);
 
     fn from_field(field: actix_multipart::Field) -> Self::Future {
         async move {
@@ -277,7 +271,7 @@ impl FromField for DynamicImage {
                     .expect("Cursor io never fails"),
             };
 
-            Ok(Self(rdr.decode()?))
+            Ok(Self(Box::new(rdr.decode()?)))
         }
         .boxed_local()
     }
@@ -286,7 +280,7 @@ impl FromField for DynamicImage {
 macro_rules! ff_img(
 	{ $ty:ident, $img:ty, $into:ident } => {
 		#[derive(Deref, DerefMut, Debug)]
-		pub struct $ty(pub $img);
+		pub struct $ty(pub Box<$img>);
 
 		impl FromField for $ty {
 			type Error = Error;
@@ -299,7 +293,7 @@ macro_rules! ff_img(
 				async move {
 					let img = DynamicImage::from_field(field).await?;
 					let img = img.0.$into();
-					Ok(Self(img))
+					Ok(Self(Box::new(img)))
 				}
 				.boxed_local()
 			}
@@ -308,9 +302,9 @@ macro_rules! ff_img(
 );
 
 macro_rules! ff_img_mozjpeg(
-	{ $ty:ident, $img:ty, $subp:ty, $into:ident } => {
+	{ $ty:ident, $img:ty, $subp:ty, $into:ident, $into_img:ident } => {
 		#[derive(Deref, DerefMut, Debug)]
-		pub struct $ty(pub $img);
+		pub struct $ty(pub Box<$img>);
 
 		impl FromField for $ty {
 			type Error = Error;
@@ -322,48 +316,59 @@ macro_rules! ff_img_mozjpeg(
 			fn from_field(field: actix_multipart::Field) -> Self::Future {
 				use mozjpeg::{decompress::DctMethod, Decompress, ALL_MARKERS};
 
-				async move {
-					let buf = Vec::<u8>::from_field(field).await.unwrap();
-					let mut decomp = Decompress::with_markers(ALL_MARKERS)
-						.from_mem(&buf[..])
-						.map_err(|_| Error::MozjpgDecodeError)?;
-					decomp.dct_method(DctMethod::IntegerFast);
+				if *field.content_type() == mime::IMAGE_JPEG {
+					async move {
+						let buf = Vec::<u8>::from_field(field).await.unwrap();
+						let mut decomp = Decompress::with_markers(ALL_MARKERS)
+							.from_mem(&buf[..])
+							.map_err(|_| Error::MozjpgDecodeError)?;
+						decomp.dct_method(DctMethod::IntegerFast);
 
-					let (w, h) = decomp.size();
-					let mut decomp = decomp.$into()
-						.map_err(|_| Error::MozjpgDecodeError)?;
-					let out = decomp
-						.read_scanlines::<$subp>()
-						.ok_or(Error::MozjpgDecodeError)?;
+						let (w, h) = decomp.size();
+						let mut decomp = decomp.$into()
+							.map_err(|_| Error::MozjpgDecodeError)?;
+						let out = decomp
+							.read_scanlines::<$subp>()
+							.ok_or(Error::MozjpgDecodeError)?;
 
-					let out: &[$subp] = &*out;
-					let sz = out.len() * std::mem::size_of::<$subp>();
-					let out: &[u8] = unsafe {
-						let out: *const u8 = std::mem::transmute(out.as_ptr());
-						std::slice::from_raw_parts(out, sz)
-					};
+						let out: &[$subp] = &*out;
+						let sz = out.len() * std::mem::size_of::<$subp>();
+						let out: &[u8] = unsafe {
+							std::slice::from_raw_parts(
+                                out.as_ptr() as *const u8,
+                                sz,
+                            )
+						};
 
-					Ok(Self(<$img>::from_raw(w as u32, h as u32, out.to_vec())
-							.ok_or(Error::MozjpgDecodeError)?))
+						Ok(Self(Box::new(<$img>::from_raw(w as u32, h as u32, out.to_vec())
+										 .ok_or(Error::MozjpgDecodeError)?)))
+					}
+					.boxed_local()
+				} else {
+					async move {
+						let img = DynamicImage::from_field(field).await?;
+						let img = img.0.$into_img();
+						Ok(Self(Box::new(img)))
+					}
+					.boxed_local()
 				}
-				.boxed_local()
 			}
 		}
 	};
 );
 
 //#[cfg(feature = "mozjpeg")]
-ff_img_mozjpeg!(RgbImage, image::RgbImage, [u8; 3], rgb);
+ff_img_mozjpeg!(RgbImage, image::RgbImage, [u8; 3], rgb, into_rgb);
 //#[cfg(not(feature = "mozjpeg"))]
 //ff_img!(RgbImage, image::RgbImage, into_rgb);
 
 //#[cfg(feature = "mozjpeg")]
-ff_img_mozjpeg!(RgbaImage, image::RgbaImage, [u8; 4], rgba);
+ff_img_mozjpeg!(RgbaImage, image::RgbaImage, [u8; 4], rgba, into_rgba);
 //#[cfg(not(feature = "mozjpeg"))]
 //ff_img!(RgbaImage, image::RgbaImage, convert);
 
 //#[cfg(feature = "mozjpeg")]
-ff_img_mozjpeg!(GrayImage, image::GrayImage, [u8; 1], grayscale);
+ff_img_mozjpeg!(GrayImage, image::GrayImage, [u8; 1], grayscale, into_luma);
 //#[cfg(not(feature = "mozjpeg"))]
 //ff_img!(GrayImage, image::GrayImage, into_luma);
 

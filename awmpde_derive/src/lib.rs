@@ -3,25 +3,20 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
-    parse_macro_input, Attribute, Data, DataStruct, DeriveInput, Field, Fields,
-    FieldsNamed, GenericArgument, PathArguments, Type, TypePath,
+    parse_macro_input, Attribute, Data, DataStruct, DeriveInput, Field, Fields, FieldsNamed,
+    GenericArgument, PathArguments, Type, TypePath,
 };
 
 fn from_json_attr(f: &Field) -> Option<&Attribute> {
     for attr in &f.attrs {
-        if attr.path.segments.len() == 1
-            && attr.path.segments[0].ident == "serde_json"
-        {
+        if attr.path.segments.len() == 1 && attr.path.segments[0].ident == "serde_json" {
             return Some(attr);
         }
     }
     None
 }
 
-fn get_struct_arg<'a, 'b>(
-    s: &'a str,
-    ty: &'b TypePath,
-) -> Option<&'b GenericArgument> {
+fn get_struct_arg<'a, 'b>(s: &'a str, ty: &'b TypePath) -> Option<&'b GenericArgument> {
     let segs = &ty.path.segments;
     if segs.len() != 1 || segs[0].ident != s {
         return None;
@@ -69,15 +64,15 @@ pub fn derive_actix_multipart(input: TokenStream) -> TokenStream {
         let name = f.ident.as_ref().unwrap();
         let ty = &f.ty;
 
-		if let Type::Path(ref typ) = ty {
-			if get_struct_arg("Option", typ).is_some() {
-				return quote! { #name: std::option::Option::None };
-			}
-			if get_struct_arg("Vec", typ).is_some() {
-				return quote! { #name: std::vec::Vec::new() };
-			}
-		}
-		quote! {
+        if let Type::Path(ref typ) = ty {
+            if get_struct_arg("Option", typ).is_some() {
+                return quote! { #name: std::option::Option::None };
+            }
+            if get_struct_arg("Vec", typ).is_some() {
+                return quote! { #name: std::vec::Vec::new() };
+            }
+        }
+        quote! {
             #name: std::result::Result::Err(awmpde::Error::FieldError(stringify!(#name)))
         }
     });
@@ -98,14 +93,14 @@ pub fn derive_actix_multipart(input: TokenStream) -> TokenStream {
                     let code = quote! {{
                         let f =
                             <#vty as awmpde::FromField>::from_field(field).await?;
-						mpstruct.#name.push(f);
+                        mpstruct.#name.push(f);
                     }};
                     return (name, code);
                 } else if let Some(vty) = get_struct_arg("Option", typ) {
                     let code = quote! {{
                         let f =
                             <#vty as awmpde::FromField>::from_field(field).await?;
-						mpstruct.#name = Some(f);
+                        mpstruct.#name = Some(f);
                     }};
                     return (name, code);
                 } else {
@@ -126,13 +121,11 @@ pub fn derive_actix_multipart(input: TokenStream) -> TokenStream {
         let name = &f.ident;
         let ty = &f.ty;
         if let Type::Path(ref typ) = ty {
-            if get_struct_arg("Option", typ).is_some()
-                || get_struct_arg("Vec", typ).is_some()
-            {
+            if get_struct_arg("Option", typ).is_some() || get_struct_arg("Vec", typ).is_some() {
                 return quote! { #name: mpstruct.#name };
             }
         }
-        quote! { #name: mpstruct.#name.unwrap() }
+        quote! { #name: mpstruct.#name? }
     });
 
     let expanded = quote! {
@@ -153,6 +146,8 @@ pub fn derive_actix_multipart(input: TokenStream) -> TokenStream {
                         #(#struct_fields,)*
                     };
 
+                    let mut e: std::option::Option<awmpde::Error> = None;
+
                     let mut mpstruct = MPStructure {
                         #(#struct_field_values,)*
                     };
@@ -160,13 +155,26 @@ pub fn derive_actix_multipart(input: TokenStream) -> TokenStream {
                     while let Ok(Some(field)) = mp.try_next().await {
                         let mut disp = awmpde::get_content_disposition(&field);
                         let name = disp.remove("name").unwrap();
+
+                        if e.is_some() {
+                            <std::vec::Vec<u8> as awmpde::FromField>::from_field(field).await?;
+                            continue;
+                        }
+
                         match &name[..] {
                             #(#matched,)*
-                            _ => return Err(awmpde::Error::NoFieldError(name.to_string())),
+                            _ => {
+                                e = Some(awmpde::Error::NoFieldError(name.to_string()));
+                                let v = <std::vec::Vec<u8> as awmpde::FromField>::from_field(field).await?;
+                            },
                         }
                     }
 
-                    Ok(Self{ #(#fields,)* })
+                    if let Some(e) = e {
+                        Err(e)
+                    } else {
+                        Ok(Self{ #(#fields,)* })
+                    }
                 }
                 .boxed_local()
             }

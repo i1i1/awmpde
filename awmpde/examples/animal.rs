@@ -12,16 +12,14 @@ pub struct AnimalDesc {
 
 #[derive(Debug, FromActixMultipart)]
 pub struct IsAnimalRequest {
-    img: awmpde::File<awmpde::RgbImage>,
+    imgs: Vec<awmpde::File<awmpde::RgbImage>>,
     #[serde_json]
     animal_desc: AnimalDesc,
 }
 
-async fn is_animal(
-    req: awmpde::Multipart<IsAnimalRequest>,
-) -> Result<HttpResponse, Error> {
+async fn is_animal(req: awmpde::Multipart<IsAnimalRequest>) -> Result<HttpResponse, Error> {
     let IsAnimalRequest {
-        img,
+        imgs,
         animal_desc: AnimalDesc { kind, .. },
     } = req.into_inner().await?;
     let kind: &str = &kind;
@@ -33,8 +31,10 @@ async fn is_animal(
     };
 
     if out {
-        let awmpde::File { name, inner, .. } = img;
-        inner.save(Path::new("animals/").join(name)).unwrap();
+        for img in imgs {
+            let awmpde::File { name, inner, .. } = img;
+            inner.save(Path::new("animals/").join(name)).unwrap();
+        }
     }
 
     Ok(actix_web::HttpResponse::Ok().body(""))
