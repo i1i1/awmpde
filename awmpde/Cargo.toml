@@ -1,6 +1,6 @@
 [package]
 name = "awmpde"
-version = "0.2.0"
+version = "0.4.0"
 authors = ["i1i1"]
 edition = "2018"
 
@@ -28,5 +28,5 @@ mime = "0.3"
 serde = "1"
 serde_json = "1"
 
-awmpde_derive = { path = "../awmpde_derive", version = "0.3.0" }
-awmpde_structs = { path = "../awmpde_structs", version = "0.2.0" }
+awmpde_derive = "0.4.0"
+awmpde_structs = "0.4.0"
