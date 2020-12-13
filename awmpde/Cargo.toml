@@ -12,6 +12,11 @@ keywords = ["multipart", "derive", "actix-web", "actix", "macro"]
 
 readme = "README.md"
 
+[features]
+default = []
+mozjpeg = ["awmpde_structs/mozjpeg"]
+uuid = ["awmpde_structs/uuid"]
+
 [dependencies]
 actix-multipart = "0.3"
 actix-web = "3"

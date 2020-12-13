@@ -1,14 +1,19 @@
 #[macro_use]
 extern crate derive_deref;
 
+pub mod images;
+#[cfg(feature = "uuid")]
+pub mod uuid_field;
+
+mod basic;
+pub use basic::*;
+
 use actix_web::{dev::Payload, http::StatusCode, FromRequest, HttpRequest};
 use displaydoc::Display;
-use either::Either;
 use futures::future::{FutureExt, LocalBoxFuture};
 use futures::StreamExt;
-use image::io::Reader as ImgReader;
-use image::{Bgr, Bgra, ImageFormat};
 use mime::Mime;
+use serde::de::DeserializeOwned;
 use thiserror::Error;
 
 use std::collections::HashMap;
@@ -16,19 +21,6 @@ use std::future::Future;
 use std::io::Cursor;
 use std::marker::PhantomData;
 use std::path::PathBuf;
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct File<T> {
-    pub name: PathBuf,
-    pub mime: Mime,
-    pub inner: T,
-}
-
-impl<T> File<T> {
-    pub fn into_inner(self) -> T {
-        self.inner
-    }
-}
 
 #[derive(Debug, Error, Display)]
 pub enum Error {
@@ -50,6 +42,12 @@ pub enum Error {
     ActixWebError(#[from] actix_web::error::Error),
     /// Failed to find field {0:?} in request
     FieldError(&'static str),
+    /// Unknown Error. Usually for empty error type
+    UnknownError,
+
+    #[cfg(feature = "uuid")]
+    /// Failed to parse UUID
+    UUIDParseError(#[from] uuid::Error),
 }
 
 impl actix_web::error::ResponseError for Error {
@@ -60,13 +58,21 @@ impl actix_web::error::ResponseError for Error {
         }
     }
 
-    fn error_response(&self) -> actix_web::web::HttpResponse<actix_web::dev::Body> {
+    fn error_response(
+        &self,
+    ) -> actix_web::web::HttpResponse<actix_web::dev::Body> {
         actix_web::dev::HttpResponseBuilder::new(self.status_code())
             .set_header(
                 actix_web::http::header::CONTENT_TYPE,
                 "text/html; charset=utf-8",
             )
             .body(self.to_string())
+    }
+}
+
+impl std::convert::From<()> for Error {
+    fn from(_: ()) -> Self {
+        Self::UnknownError
     }
 }
 
@@ -80,8 +86,6 @@ pub trait FromField: Sized {
     type Error: Into<actix_http::error::Error>;
     /// Future that resolves to a Self
     type Future: Future<Output = Result<Self, Self::Error>> + 'static;
-    /// Mime that should be in field
-    const MIME: Either<mime::Mime, mime::Name<'static>> = Either::Left(mime::APPLICATION_JSON);
 
     fn from_field(field: actix_multipart::Field) -> Self::Future;
 }
@@ -126,14 +130,55 @@ impl<'a, T: Sized> FromRequest for Multipart<T> {
     }
 }
 
-#[derive(Deref, DerefMut, Debug)]
-pub struct ImageBuffer<P: image::Pixel, Cont>(pub Box<image::ImageBuffer<P, Cont>>);
+/// Type for annotating unwrapping of FormOrMultipartFuture by
+/// `form_or_multipart_unwrap`.
+#[derive(Deref, DerefMut, Debug, Clone, Copy, Display)]
+pub struct FormOrMultipart<T>(pub T);
 
-#[derive(Deref, DerefMut)]
-pub struct DynamicImage(pub Box<image::DynamicImage>);
+/// Type for accepting request both with types urlencoded and multipart.
+pub enum FormOrMultipartFuture<T> {
+    /// url encoded form
+    Form(actix_web::web::Form<T>),
+    /// multipart request
+    Multipart(Multipart<T>),
+}
+
+impl<'a, T: FromMultipart<'a>> FormOrMultipartFuture<T> {
+    /// If type match returns inner type
+    pub async fn into_inner(self) -> Result<T, Error> {
+        Ok(match self {
+            Self::Form(f) => f.into_inner(),
+            Self::Multipart(m) => m.into_inner().await?,
+        })
+    }
+}
+
+impl<T: DeserializeOwned + 'static> FromRequest for FormOrMultipartFuture<T> {
+    type Config = ();
+    type Error = Error;
+    type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
+
+    #[inline]
+    fn from_request(req: &HttpRequest, payload: &mut Payload) -> Self::Future {
+        use actix_web::HttpMessage;
+
+        let cont_type: &str = &req.content_type().to_lowercase();
+        if cont_type == "application/x-www-form-urlencoded" {
+            actix_web::web::Form::from_request(req, payload)
+                .map(move |res| Ok(Self::Form(res?)))
+                .boxed_local()
+        } else {
+            Multipart::from_request(req, payload)
+                .map(move |res| Ok(Self::Multipart(res?)))
+                .boxed_local()
+        }
+    }
+}
 
 // TODO: doesn't assume UTF8
-pub fn get_content_disposition(field: &actix_multipart::Field) -> HashMap<Box<str>, Box<str>> {
+pub fn get_content_disposition(
+    field: &actix_multipart::Field,
+) -> HashMap<Box<str>, Box<str>> {
     let mut out = HashMap::new();
     let disp = field
         .headers()
@@ -162,216 +207,3 @@ pub fn get_content_disposition(field: &actix_multipart::Field) -> HashMap<Box<st
 
     out
 }
-
-impl FromField for Vec<u8> {
-    type Error = Error;
-    type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
-
-    const MIME: Either<mime::Mime, mime::Name<'static>> =
-        Either::Left(mime::APPLICATION_OCTET_STREAM);
-
-    fn from_field(mut field: actix_multipart::Field) -> Self::Future {
-        async move {
-            let mut vec: Vec<u8> = Vec::new();
-            while let Some(chunk) = field.next().await {
-                vec.extend(chunk.iter().flat_map(|m| m.iter()))
-            }
-            Ok(vec)
-        }
-        .boxed_local()
-    }
-}
-
-impl<T> FromField for File<T>
-where
-    T: FromField + 'static,
-    T::Error: std::fmt::Debug,
-{
-    type Error = Error;
-    type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
-
-    const MIME: Either<mime::Mime, mime::Name<'static>> = Either::Right(mime::IMAGE);
-
-    fn from_field(field: actix_multipart::Field) -> Self::Future {
-        let mime = field.content_type().clone();
-        let mut disp = get_content_disposition(&field);
-        let name = disp
-            .remove("filename")
-            .ok_or(Error::NoFilenameError)
-            .map(|s| PathBuf::from(s.to_string())); //
-        let inner = T::from_field(field);
-
-        async move {
-            let name = name?;
-            let inner: T = inner.await.unwrap();
-
-            Ok(Self { name, mime, inner })
-        }
-        .boxed_local()
-    }
-}
-
-#[derive(Deref, DerefMut)]
-pub struct Json<T>(pub T);
-
-impl<T: serde::de::DeserializeOwned + 'static> FromField for Json<T> {
-    type Error = Error;
-    type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
-
-    const MIME: Either<mime::Mime, mime::Name<'static>> = Either::Left(mime::APPLICATION_JSON);
-
-    fn from_field(field: actix_multipart::Field) -> Self::Future {
-        let vec = Vec::<u8>::from_field(field);
-        async move {
-            let vec = vec.await.unwrap();
-            let json: T = serde_json::from_reader(&*vec)?;
-            Ok(Self(json))
-        }
-        .boxed_local()
-    }
-}
-
-impl FromField for String {
-    type Error = Error;
-    type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
-
-    const MIME: Either<mime::Mime, mime::Name<'static>> = Either::Right(mime::STAR);
-
-    fn from_field(field: actix_multipart::Field) -> Self::Future {
-        async move {
-            let vec = Vec::<u8>::from_field(field).await.unwrap();
-            Ok(String::from_utf8(vec)?)
-        }
-        .boxed_local()
-    }
-}
-
-impl FromField for DynamicImage {
-    type Error = Error;
-    type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
-
-    const MIME: Either<mime::Mime, mime::Name<'static>> = Either::Right(mime::IMAGE);
-
-    fn from_field(field: actix_multipart::Field) -> Self::Future {
-        async move {
-            let ct = field.content_type().clone();
-            let vec = Vec::<u8>::from_field(field).await.unwrap();
-            let tp = match ct.subtype() {
-                mime::JPEG => Some(ImageFormat::Jpeg),
-                mime::PNG => Some(ImageFormat::Png),
-                mime::GIF => Some(ImageFormat::Gif),
-                mime::BMP => Some(ImageFormat::Bmp),
-                _ => None,
-            };
-            let cur = Cursor::new(&*vec);
-            let rdr = match tp {
-                Some(fmt) => ImgReader::with_format(cur, fmt),
-                None => ImgReader::new(cur)
-                    .with_guessed_format()
-                    .expect("Cursor io never fails"),
-            };
-
-            Ok(Self(Box::new(rdr.decode()?)))
-        }
-        .boxed_local()
-    }
-}
-
-macro_rules! ff_img(
-	{ $ty:ident, $img:ty, $into:ident } => {
-		#[derive(Deref, DerefMut, Debug)]
-		pub struct $ty(pub Box<$img>);
-
-		impl FromField for $ty {
-			type Error = Error;
-			type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
-
-			const MIME: Either<mime::Mime, mime::Name<'static>> =
-				DynamicImage::MIME;
-
-			fn from_field(field: actix_multipart::Field) -> Self::Future {
-				async move {
-					let img = DynamicImage::from_field(field).await?;
-					let img = img.0.$into();
-					Ok(Self(Box::new(img)))
-				}
-				.boxed_local()
-			}
-		}
-	};
-);
-
-macro_rules! ff_img_mozjpeg(
-	{ $ty:ident, $img:ty, $subp:ty, $into:ident, $into_img:ident } => {
-		#[derive(Deref, DerefMut, Debug)]
-		pub struct $ty(pub Box<$img>);
-
-		impl FromField for $ty {
-			type Error = Error;
-			type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
-
-			const MIME: Either<mime::Mime, mime::Name<'static>> =
-				Either::Left(mime::IMAGE_JPEG);
-
-			fn from_field(field: actix_multipart::Field) -> Self::Future {
-				use mozjpeg::{decompress::DctMethod, Decompress, ALL_MARKERS};
-
-				if *field.content_type() == mime::IMAGE_JPEG {
-					async move {
-						let buf = Vec::<u8>::from_field(field).await.unwrap();
-						let mut decomp = Decompress::with_markers(ALL_MARKERS)
-							.from_mem(&buf[..])
-							.map_err(|_| Error::MozjpgDecodeError)?;
-						decomp.dct_method(DctMethod::IntegerFast);
-
-						let (w, h) = decomp.size();
-						let mut decomp = decomp.$into()
-							.map_err(|_| Error::MozjpgDecodeError)?;
-						let out = decomp
-							.read_scanlines::<$subp>()
-							.ok_or(Error::MozjpgDecodeError)?;
-
-						let out: &[$subp] = &*out;
-						let sz = out.len() * std::mem::size_of::<$subp>();
-						let out: &[u8] = unsafe {
-							std::slice::from_raw_parts(
-                                out.as_ptr() as *const u8,
-                                sz,
-                            )
-						};
-
-						Ok(Self(Box::new(<$img>::from_raw(w as u32, h as u32, out.to_vec())
-										 .ok_or(Error::MozjpgDecodeError)?)))
-					}
-					.boxed_local()
-				} else {
-					async move {
-						let img = DynamicImage::from_field(field).await?;
-						let img = img.0.$into_img();
-						Ok(Self(Box::new(img)))
-					}
-					.boxed_local()
-				}
-			}
-		}
-	};
-);
-
-//#[cfg(feature = "mozjpeg")]
-ff_img_mozjpeg!(RgbImage, image::RgbImage, [u8; 3], rgb, into_rgb);
-//#[cfg(not(feature = "mozjpeg"))]
-//ff_img!(RgbImage, image::RgbImage, into_rgb);
-
-//#[cfg(feature = "mozjpeg")]
-ff_img_mozjpeg!(RgbaImage, image::RgbaImage, [u8; 4], rgba, into_rgba);
-//#[cfg(not(feature = "mozjpeg"))]
-//ff_img!(RgbaImage, image::RgbaImage, convert);
-
-//#[cfg(feature = "mozjpeg")]
-ff_img_mozjpeg!(GrayImage, image::GrayImage, [u8; 1], grayscale, into_luma);
-//#[cfg(not(feature = "mozjpeg"))]
-//ff_img!(GrayImage, image::GrayImage, into_luma);
-
-ff_img!(GrayAlphaImage, image::GrayAlphaImage, into_luma_alpha);
-ff_img!(BgrImage, image::ImageBuffer<Bgr<u8>, Vec<u8>>, into_bgr);
-ff_img!(BgraImage, image::ImageBuffer<Bgra<u8>, Vec<u8>>, into_bgra);

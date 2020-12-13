@@ -1,8 +1,6 @@
-use actix_web::{middleware, web, App, Error, HttpResponse, HttpServer};
-use awmpde::FromActixMultipart;
+use actix_web::{middleware, web, App, HttpResponse, HttpServer};
+use awmpde::{form_or_multipart_unwrap, FromActixMultipart};
 use serde::Deserialize;
-
-use std::path::Path;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct AnimalDesc {
@@ -10,20 +8,19 @@ pub struct AnimalDesc {
     kind: String,
 }
 
-#[derive(Debug, FromActixMultipart)]
+#[derive(Debug, Deserialize, FromActixMultipart)]
 pub struct IsAnimalRequest {
-    imgs: Vec<awmpde::File<awmpde::images::RgbImage>>,
     #[serde_json]
     animal_desc: AnimalDesc,
 }
 
+#[form_or_multipart_unwrap]
 async fn is_animal(
-    req: awmpde::Multipart<IsAnimalRequest>,
-) -> Result<HttpResponse, Error> {
+    awmpde::FormOrMultipart(req): awmpde::FormOrMultipart<IsAnimalRequest>,
+) -> HttpResponse {
     let IsAnimalRequest {
-        imgs,
         animal_desc: AnimalDesc { kind, .. },
-    } = req.into_inner().await?;
+    } = req;
     let kind: &str = &kind;
 
     let out = match kind {
@@ -32,14 +29,7 @@ async fn is_animal(
         _ => false,
     };
 
-    if out {
-        for img in imgs {
-            let awmpde::File { name, inner, .. } = img;
-            inner.save(Path::new("animals/").join(name)).unwrap();
-        }
-    }
-
-    Ok(actix_web::HttpResponse::Ok().body(""))
+    actix_web::HttpResponse::Ok().body(format!("out is {}", out))
 }
 
 #[actix_web::main]
