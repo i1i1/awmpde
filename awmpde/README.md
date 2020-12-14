@@ -13,7 +13,7 @@ for `actix-multipart`.
 This crate supports `actix-web` of versions 3.x only.
 
 ```toml
-awmpde = "0.2.0"
+awmpde = "0.4.0"
 ```
 
 ### Example
@@ -47,11 +47,21 @@ async fn put_book(book: awmpde::Multipart<Book>) -> Result<HttpResponse, Error> 
     Ok(HttpResponse::Ok().body(body))
 }
 
+#[post("/update_description")]
+#[awmpde::form_or_multipart_unwrap]
+async fn update_description(
+    awmpde::FormOrMultipart(description): awmpde::FormOrMultipart<Description>,
+) -> HttpResponse {
+    let body = format!("Got description {:?}", desription);
+    HttpResponse::Ok().body(body)
+}
+
 #[actix_rt::main]
 async fn main() -> Result<(), std::io::Error> {
     actix_web::HttpServer::new(move || {
         actix_web::App::new()
             .route(put_book)
+            .route(uupdate_description)
     })
     .bind("0.0.0.0:3000")?
     .run()
