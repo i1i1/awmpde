@@ -1,6 +1,6 @@
 [package]
 name = "awmpde"
-version = "0.4.1"
+version = "0.5.0"
 authors = ["i1i1"]
 edition = "2018"
 
@@ -15,7 +15,8 @@ readme = "README.md"
 [features]
 default = []
 mozjpeg = ["awmpde_structs/mozjpeg"]
-uuid = ["awmpde_structs/uuid"]
+uuid    = ["awmpde_structs/uuid"]
+chrono  = ["awmpde_structs/chrono"]
 
 [dependencies]
 actix-multipart = "0.3"
@@ -28,5 +29,5 @@ mime = "0.3"
 serde = "1"
 serde_json = "1"
 
-awmpde_derive = "0.4.0"
-awmpde_structs = "0.4.0"
+awmpde_derive  = { version = "0.4.0", path = "../awmpde_derive" }
+awmpde_structs = { version = "0.5.0", path = "../awmpde_structs" }
