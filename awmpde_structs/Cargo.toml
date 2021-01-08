@@ -1,6 +1,6 @@
 [package]
 name = "awmpde_structs"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["i1i1"]
 edition = "2018"
 

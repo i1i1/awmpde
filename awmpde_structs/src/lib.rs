@@ -79,8 +79,10 @@ impl std::convert::From<()> for Error {
 }
 
 pub struct Multipart<T> {
-    mp: actix_multipart::Multipart,
-    marker: PhantomData<T>,
+    /// Actual multipart
+    pub mp: actix_multipart::Multipart,
+    /// Marker of phantomdata
+    pub _marker: PhantomData<T>,
 }
 
 pub trait FromField: Sized {
@@ -125,7 +127,7 @@ impl<'a, T: Sized> FromRequest for Multipart<T> {
         async {
             Ok(Self {
                 mp: mp.await?,
-                marker: Default::default(),
+                _marker: Default::default(),
             })
         }
         .boxed_local()
