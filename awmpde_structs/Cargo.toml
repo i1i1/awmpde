@@ -1,6 +1,6 @@
 [package]
 name = "awmpde_structs"
-version = "0.5.2"
+version = "0.6.0"
 authors = ["i1i1"]
 edition = "2018"
 
@@ -12,6 +12,7 @@ keywords = ["multipart", "derive", "actix-web", "actix", "macro"]
 
 [features]
 default = []
+test = ["actix-utils"]
 
 [dependencies]
 actix-web = "3"
@@ -26,6 +27,7 @@ serde_json = "1"
 displaydoc = "0.1"
 thiserror = "1"
 
+actix-utils = { version = "2", optional = true }
 uuid = { version = "0.8", optional = true }
 mozjpeg = { version = "0.8", optional = true }
 chrono = { version = "0.4", features = ["serde"], optional = true }

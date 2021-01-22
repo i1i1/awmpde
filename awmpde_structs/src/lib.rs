@@ -4,6 +4,8 @@ extern crate derive_deref;
 #[cfg(feature = "chrono")]
 pub mod chrono_types;
 pub mod images;
+#[cfg(feature = "test")]
+pub mod test;
 #[cfg(feature = "uuid")]
 pub mod uuid_field;
 
