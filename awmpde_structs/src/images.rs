@@ -64,7 +64,7 @@ macro_rules! ff_img(
 #[cfg(feature = "mozjpeg")]
 macro_rules! ff_img_mozjpeg(
 	{ $ty:ident, $img:ty, $subp:ty, $into:ident, $into_img:ident } => {
-		#[derive(Deref, DerefMut, Debug)]
+		#[derive(Deref, DerefMut, Debug, Clone)]
 		pub struct $ty(pub Box<$img>);
 
 		impl FromField for $ty {
