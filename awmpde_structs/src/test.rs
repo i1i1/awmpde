@@ -7,6 +7,7 @@ use actix_web::http::header::{self, HeaderMap};
 use actix_web::web::Bytes;
 use futures::{Stream, StreamExt};
 
+#[derive(Clone)]
 pub struct MultipartBuilder(Vec<u8>);
 
 impl MultipartBuilder {
