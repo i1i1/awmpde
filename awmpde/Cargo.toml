@@ -1,6 +1,6 @@
 [package]
 name = "awmpde"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["i1i1"]
 edition = "2018"
 
@@ -25,9 +25,9 @@ serde = "1"
 serde_json = "1"
 
 [dependencies]
-actix-multipart = "0.3"
-actix-web = "3"
+actix-multipart = "0.4.0-beta.7"
+actix-web = "4.0.0-beta.10"
 futures = "0.3"
 
 awmpde_derive  = { version = "0.4.0", path = "../awmpde_derive" }
-awmpde_structs = { version = "0.6.0", path = "../awmpde_structs" }
+awmpde_structs = { version = "0.7.0", path = "../awmpde_structs" }

@@ -1,9 +1,10 @@
+use std::convert::Infallible;
 use super::*;
 
 // Returns raw bytes of multipart payload
 impl FromField for Vec<u8> {
     // Should never return error as anything fits
-    type Error = ();
+    type Error = Infallible ;
     type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
 
     fn from_field(mut field: actix_multipart::Field) -> Self::Future {

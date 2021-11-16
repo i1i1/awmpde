@@ -65,17 +65,18 @@ impl actix_web::error::ResponseError for Error {
     fn error_response(
         &self,
     ) -> actix_web::web::HttpResponse<actix_web::dev::Body> {
-        actix_web::dev::HttpResponseBuilder::new(self.status_code())
-            .set_header(
+        actix_web::HttpResponseBuilder::new(self.status_code())
+            .insert_header((
                 actix_web::http::header::CONTENT_TYPE,
                 "text/html; charset=utf-8",
-            )
+            ))
             .body(self.to_string())
     }
 }
+use std::convert::Infallible;
 
-impl std::convert::From<()> for Error {
-    fn from(_: ()) -> Self {
+impl std::convert::From<Infallible> for Error {
+    fn from(_: Infallible) -> Self {
         Self::UnknownError
     }
 }
@@ -89,7 +90,7 @@ pub struct Multipart<T> {
 
 pub trait FromField: Sized {
     /// The associated error which can be returned.
-    type Error: Into<actix_http::error::Error>;
+    type Error: Into<actix_web::Error>;
     /// Future that resolves to a Self
     type Future: Future<Output = Result<Self, Self::Error>> + 'static;
 
@@ -104,7 +105,7 @@ pub trait FromField: Sized {
 /// parsing different fields.
 pub trait FromMultipart<'a>: Sized {
     /// The associated error which can be returned.
-    type Error: Into<actix_web::error::Error>;
+    type Error: Into<actix_web::Error>;
     /// Future that resolves to a Self
     type Future: Future<Output = Result<Self, Self::Error>> + 'a;
 
@@ -121,7 +122,6 @@ impl<'a, T: FromMultipart<'a>> Multipart<T> {
 impl<'a, T: Sized> FromRequest for Multipart<T> {
     type Error = Error;
     type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
-    type Config = ();
 
     #[inline]
     fn from_request(req: &HttpRequest, payload: &mut Payload) -> Self::Future {
@@ -160,7 +160,6 @@ impl<'a, T: FromMultipart<'a>> FormOrMultipartFuture<T> {
 }
 
 impl<T: DeserializeOwned + 'static> FromRequest for FormOrMultipartFuture<T> {
-    type Config = ();
     type Error = Error;
     type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
 
