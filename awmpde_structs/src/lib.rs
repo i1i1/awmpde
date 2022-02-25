@@ -195,9 +195,9 @@ pub fn get_content_disposition(field: &actix_multipart::Field) -> HashMap<Box<st
         let vec = f.splitn(2, '=').collect::<Vec<_>>();
         let k = vec[0];
         let v = vec[1]
-            .strip_prefix("\"")
+            .strip_prefix('\"')
             .unwrap()
-            .strip_suffix("\"")
+            .strip_suffix('\"')
             .unwrap();
 
         out.insert(

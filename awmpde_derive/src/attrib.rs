@@ -16,7 +16,7 @@ fn get_form_or_mp_generic(inp: &syn::FnArg) -> Option<syn::GenericArgument> {
             } else {
                 unimplemented!()
             };
-            if ident.to_string() == "FormOrMultipart" && args.len() == 1 {
+            if *ident == "FormOrMultipart" && args.len() == 1 {
                 return Some(args[0].clone());
             }
         } else {
@@ -36,7 +36,7 @@ fn map_form_to_mp_to_future(inp: &syn::FnArg) -> syn::FnArg {
                 syn::parse_str(&format!(
                     "{}: awmpde::FormOrMultipartFuture<{}>",
                     FORM_OR_MP,
-                    quote!(#tp).to_string()
+                    quote!(#tp)
                 ))
             } else {
                 unimplemented!()
@@ -57,11 +57,9 @@ fn get_ident(inp: syn::FnArg) -> syn::Ident {
 }
 
 fn assert_one_form_or_mp(inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>) {
-    let multiparts: Vec<_> = inputs
+    assert!(inputs
         .iter()
-        .filter(|inp| get_form_or_mp_generic(inp).is_some())
-        .collect();
-    assert_eq!(multiparts.len(), 1);
+        .any(|inp| get_form_or_mp_generic(inp).is_some()))
 }
 
 pub fn form_or_multipart_unwrap(_: TokenStream, input: TokenStream) -> TokenStream {
@@ -87,7 +85,7 @@ pub fn form_or_multipart_unwrap(_: TokenStream, input: TokenStream) -> TokenStre
 
     assert_one_form_or_mp(&inputs);
 
-    let int_ident = syn::Ident::new(&format!("{}_internal", ident.to_string()), ident.span());
+    let int_ident = syn::Ident::new(&format!("{}_internal", ident), ident.span());
     let (int_inputs, attrs) = (inputs.iter(), attrs.iter());
 
     let int_cal_args = inputs.iter().map(map_form_to_mp_to_future).map(get_ident);
