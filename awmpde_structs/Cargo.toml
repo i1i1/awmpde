@@ -15,9 +15,9 @@ default = []
 test = ["actix-utils"]
 
 [dependencies]
-actix-web = "4.0.0-beta.10"
-actix-http = "3.0.0-beta.11"
-actix-multipart = "0.4.0-beta.7"
+actix-web = "4.0.0"
+actix-http = "3.0.0"
+actix-multipart = "0.4.0"
 image = "0.23"
 mime = "0.3"
 futures = "0.3"

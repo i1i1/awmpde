@@ -10,14 +10,12 @@ fn get_form_or_mp_generic(inp: &syn::FnArg) -> Option<syn::GenericArgument> {
             ..
         }) = &**ty
         {
-            let syn::PathSegment { ident, arguments } =
-                segments.last().unwrap();
-            let args =
-                if let syn::PathArguments::AngleBracketed(args) = arguments {
-                    &args.args
-                } else {
-                    unimplemented!()
-                };
+            let syn::PathSegment { ident, arguments } = segments.last().unwrap();
+            let args = if let syn::PathArguments::AngleBracketed(args) = arguments {
+                &args.args
+            } else {
+                unimplemented!()
+            };
             if ident.to_string() == "FormOrMultipart" && args.len() == 1 {
                 return Some(args[0].clone());
             }
@@ -58,9 +56,7 @@ fn get_ident(inp: syn::FnArg) -> syn::Ident {
     unimplemented!()
 }
 
-fn assert_one_form_or_mp(
-    inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>,
-) {
+fn assert_one_form_or_mp(inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>) {
     let multiparts: Vec<_> = inputs
         .iter()
         .filter(|inp| get_form_or_mp_generic(inp).is_some())
@@ -68,10 +64,7 @@ fn assert_one_form_or_mp(
     assert_eq!(multiparts.len(), 1);
 }
 
-pub fn form_or_multipart_unwrap(
-    _: TokenStream,
-    input: TokenStream,
-) -> TokenStream {
+pub fn form_or_multipart_unwrap(_: TokenStream, input: TokenStream) -> TokenStream {
     let syn::ItemFn {
         attrs,
         vis,
@@ -94,14 +87,10 @@ pub fn form_or_multipart_unwrap(
 
     assert_one_form_or_mp(&inputs);
 
-    let int_ident = syn::Ident::new(
-        &format!("{}_internal", ident.to_string()),
-        ident.span(),
-    );
+    let int_ident = syn::Ident::new(&format!("{}_internal", ident.to_string()), ident.span());
     let (int_inputs, attrs) = (inputs.iter(), attrs.iter());
 
-    let int_cal_args =
-        inputs.iter().map(map_form_to_mp_to_future).map(get_ident);
+    let int_cal_args = inputs.iter().map(map_form_to_mp_to_future).map(get_ident);
     let inputs = inputs.iter().map(map_form_to_mp_to_future);
 
     let out = quote! {

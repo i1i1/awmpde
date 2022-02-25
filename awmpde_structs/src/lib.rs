@@ -62,9 +62,7 @@ impl actix_web::error::ResponseError for Error {
         }
     }
 
-    fn error_response(
-        &self,
-    ) -> actix_web::web::HttpResponse<actix_web::dev::Body> {
+    fn error_response(&self) -> actix_web::HttpResponse<actix_web::body::BoxBody> {
         actix_web::HttpResponseBuilder::new(self.status_code())
             .insert_header((
                 actix_web::http::header::CONTENT_TYPE,
@@ -181,9 +179,7 @@ impl<T: DeserializeOwned + 'static> FromRequest for FormOrMultipartFuture<T> {
 }
 
 // TODO: doesn't assume UTF8
-pub fn get_content_disposition(
-    field: &actix_multipart::Field,
-) -> HashMap<Box<str>, Box<str>> {
+pub fn get_content_disposition(field: &actix_multipart::Field) -> HashMap<Box<str>, Box<str>> {
     let mut out = HashMap::new();
     let disp = field
         .headers()

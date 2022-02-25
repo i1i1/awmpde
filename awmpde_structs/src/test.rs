@@ -39,10 +39,7 @@ impl MultipartBuilder {
         content: C,
     ) -> Self {
         self = self
-            .write(
-                format!("Content-Disposition: form-data; name=\"{}\"", name)
-                    .bytes(),
-            )
+            .write(format!("Content-Disposition: form-data; name=\"{}\"", name).bytes())
             .new_line();
 
         if let Some(tp) = cont_type {
@@ -72,9 +69,7 @@ impl MultipartBuilder {
         (tx, rx.map(|res| res.map_err(|_| panic!())))
     }
 
-    pub fn build_payload(
-        self,
-    ) -> impl Stream<Item = Result<Bytes, PayloadError>> {
+    pub fn build_payload(self) -> impl Stream<Item = Result<Bytes, PayloadError>> {
         let (sender, payload) = Self::create_stream();
         sender.send(Ok(self.build_payload_bytes())).unwrap();
         payload
@@ -82,10 +77,7 @@ impl MultipartBuilder {
 
     pub fn build(self) -> Multipart {
         let mut headers = HeaderMap::new();
-        headers.insert(
-            header::CONTENT_TYPE,
-            Self::CONTENT_TYPE.try_into().unwrap(),
-        );
+        headers.insert(header::CONTENT_TYPE, Self::CONTENT_TYPE.try_into().unwrap());
 
         Multipart::new(&headers, self.build_payload())
     }

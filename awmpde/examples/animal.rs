@@ -17,9 +17,7 @@ pub struct IsAnimalRequest {
     animal_desc: AnimalDesc,
 }
 
-async fn is_animal(
-    req: awmpde::Multipart<IsAnimalRequest>,
-) -> Result<HttpResponse, Error> {
+async fn is_animal(req: awmpde::Multipart<IsAnimalRequest>) -> Result<HttpResponse, Error> {
     let IsAnimalRequest {
         imgs,
         animal_desc: AnimalDesc { kind, .. },
