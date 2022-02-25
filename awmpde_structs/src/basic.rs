@@ -79,6 +79,15 @@ impl<T: serde::de::DeserializeOwned + 'static> FromField for Json<T> {
     }
 }
 
+impl<T: FromField + 'static> FromField for Box<T> {
+    type Error = T::Error;
+    type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
+
+    fn from_field(field: actix_multipart::Field) -> Self::Future {
+        async move { T::from_field(field).await.map(Box::new) }.boxed_local()
+    }
+}
+
 impl FromField for String {
     type Error = Error;
     type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;

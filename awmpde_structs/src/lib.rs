@@ -21,6 +21,7 @@ use serde::de::DeserializeOwned;
 use thiserror::Error;
 
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::future::Future;
 use std::io::Cursor;
 use std::marker::PhantomData;
@@ -71,11 +72,10 @@ impl actix_web::error::ResponseError for Error {
             .body(self.to_string())
     }
 }
-use std::convert::Infallible;
 
 impl std::convert::From<Infallible> for Error {
-    fn from(_: Infallible) -> Self {
-        Self::UnknownError
+    fn from(err: Infallible) -> Self {
+        match err {}
     }
 }
 

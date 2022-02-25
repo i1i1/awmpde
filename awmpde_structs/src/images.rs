@@ -4,10 +4,10 @@ use image::io::Reader as ImgReader;
 use image::{Bgr, Bgra, ImageFormat};
 
 #[derive(Deref, DerefMut, Debug)]
-pub struct ImageBuffer<P: image::Pixel, Cont>(pub Box<image::ImageBuffer<P, Cont>>);
+pub struct ImageBuffer<P: image::Pixel, Cont>(pub image::ImageBuffer<P, Cont>);
 
 #[derive(Deref, DerefMut)]
-pub struct DynamicImage(pub Box<image::DynamicImage>);
+pub struct DynamicImage(pub image::DynamicImage);
 
 impl FromField for DynamicImage {
     type Error = Error;
@@ -32,7 +32,7 @@ impl FromField for DynamicImage {
                     .expect("Cursor io never fails"),
             };
 
-            Ok(Self(Box::new(rdr.decode()?)))
+            Ok(Self(rdr.decode()?))
         }
         .boxed_local()
     }
@@ -41,7 +41,7 @@ impl FromField for DynamicImage {
 macro_rules! ff_img(
 	{ $ty:ident, $img:ty, $into:ident } => {
 		#[derive(Deref, DerefMut, Debug)]
-		pub struct $ty(pub Box<$img>);
+		pub struct $ty(pub $img);
 
 		impl FromField for $ty {
 			type Error = Error;
@@ -51,7 +51,7 @@ macro_rules! ff_img(
 				async move {
 					let img = DynamicImage::from_field(field).await?;
 					let img = img.0.$into();
-					Ok(Self(Box::new(img)))
+					Ok(Self(img))
 				}
 				.boxed_local()
 			}
@@ -63,7 +63,7 @@ macro_rules! ff_img(
 macro_rules! ff_img_mozjpeg(
 	{ $ty:ident, $img:ty, $subp:ty, $into:ident, $into_img:ident } => {
 		#[derive(Deref, DerefMut, Debug, Clone)]
-		pub struct $ty(pub Box<$img>);
+		pub struct $ty(pub $img);
 
 		impl FromField for $ty {
 			type Error = Error;
@@ -96,15 +96,15 @@ macro_rules! ff_img_mozjpeg(
                             )
 						};
 
-						Ok(Self(Box::new(<$img>::from_raw(w as u32, h as u32, out.to_vec())
-										 .ok_or(Error::MozjpgDecodeError)?)))
+						Ok(Self(<$img>::from_raw(w as u32, h as u32, out.to_vec())
+										 .ok_or(Error::MozjpgDecodeError)?))
 					}
 					.boxed_local()
 				} else {
 					async move {
 						let img = DynamicImage::from_field(field).await?;
 						let img = img.0.$into_img();
-						Ok(Self(Box::new(img)))
+						Ok(Self(img))
 					}
 					.boxed_local()
 				}

@@ -6,12 +6,9 @@ use syn::{
 };
 
 fn from_json_attr(f: &Field) -> Option<&Attribute> {
-    for attr in &f.attrs {
-        if attr.path.segments.len() == 1 && attr.path.segments[0].ident == "serde_json" {
-            return Some(attr);
-        }
-    }
-    None
+    f.attrs
+        .iter()
+        .find(|attr| attr.path.segments.len() == 1 && attr.path.segments[0].ident == "serde_json")
 }
 
 fn get_struct_arg<'a, 'b>(s: &'a str, ty: &'b TypePath) -> Option<&'b GenericArgument> {
