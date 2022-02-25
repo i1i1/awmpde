@@ -4,9 +4,7 @@ use image::io::Reader as ImgReader;
 use image::{Bgr, Bgra, ImageFormat};
 
 #[derive(Deref, DerefMut, Debug)]
-pub struct ImageBuffer<P: image::Pixel, Cont>(
-    pub Box<image::ImageBuffer<P, Cont>>,
-);
+pub struct ImageBuffer<P: image::Pixel, Cont>(pub Box<image::ImageBuffer<P, Cont>>);
 
 #[derive(Deref, DerefMut)]
 pub struct DynamicImage(pub Box<image::DynamicImage>);

@@ -1,25 +1,20 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
-    parse_macro_input, Attribute, Data, DataStruct, DeriveInput, Field, Fields,
-    FieldsNamed, GenericArgument, PathArguments, Type, TypePath,
+    parse_macro_input, Attribute, Data, DataStruct, DeriveInput, Field, Fields, FieldsNamed,
+    GenericArgument, PathArguments, Type, TypePath,
 };
 
 fn from_json_attr(f: &Field) -> Option<&Attribute> {
     for attr in &f.attrs {
-        if attr.path.segments.len() == 1
-            && attr.path.segments[0].ident == "serde_json"
-        {
+        if attr.path.segments.len() == 1 && attr.path.segments[0].ident == "serde_json" {
             return Some(attr);
         }
     }
     None
 }
 
-fn get_struct_arg<'a, 'b>(
-    s: &'a str,
-    ty: &'b TypePath,
-) -> Option<&'b GenericArgument> {
+fn get_struct_arg<'a, 'b>(s: &'a str, ty: &'b TypePath) -> Option<&'b GenericArgument> {
     let segs = &ty.path.segments;
     if segs.len() != 1 || segs[0].ident != s {
         return None;
@@ -123,9 +118,7 @@ pub fn derive_actix_multipart(input: TokenStream) -> TokenStream {
         let name = &f.ident;
         let ty = &f.ty;
         if let Type::Path(ref typ) = ty {
-            if get_struct_arg("Option", typ).is_some()
-                || get_struct_arg("Vec", typ).is_some()
-            {
+            if get_struct_arg("Option", typ).is_some() || get_struct_arg("Vec", typ).is_some() {
                 return quote! { #name: mpstruct.#name };
             }
         }

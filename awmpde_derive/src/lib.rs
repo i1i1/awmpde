@@ -6,10 +6,7 @@ mod derive;
 use proc_macro::TokenStream;
 
 #[proc_macro_attribute]
-pub fn form_or_multipart_unwrap(
-    args: TokenStream,
-    input: TokenStream,
-) -> TokenStream {
+pub fn form_or_multipart_unwrap(args: TokenStream, input: TokenStream) -> TokenStream {
     attrib::form_or_multipart_unwrap(args, input)
 }
 
