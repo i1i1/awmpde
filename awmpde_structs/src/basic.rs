@@ -1,6 +1,8 @@
 use super::*;
 use std::convert::Infallible;
 
+use futures::future::FutureExt;
+
 // Returns raw bytes of multipart payload
 impl FromField for Vec<u8> {
     // Should never return error as anything fits
@@ -81,10 +83,10 @@ impl<T: serde::de::DeserializeOwned + 'static> FromField for Json<T> {
 
 impl<T: FromField + 'static> FromField for Box<T> {
     type Error = T::Error;
-    type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
+    type Future = futures::future::Map<T::Future, fn(Result<T, T::Error>) -> Result<Box<T>, T::Error>>;
 
     fn from_field(field: actix_multipart::Field) -> Self::Future {
-        async move { T::from_field(field).await.map(Box::new) }.boxed_local()
+        T::from_field(field).map(|res| res.map(Box::new))
     }
 }
 
